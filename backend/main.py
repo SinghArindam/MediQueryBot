@@ -4,26 +4,23 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
-from peft import PeftModel
+# PEFT is no longer imported here as we load a merged model
 
 # --- Configuration ---
-# CRITICAL: Replace with the base model ID you used for fine-tuning
-BASE_MODEL_ID = "google/gemma-2b-it" # OR "google/gemma-1.1-2b-it" or your specific base
-ADAPTER_MODEL_PATH = "../fintuned_model" # Path relative to this main.py file
+# Path to the directory containing your MERGED .safetensors model and tokenizer files
+MERGED_MODEL_PATH = "../fintuned_model" # Path relative to this main.py file
 
 # --- Model Loading ---
 model = None
 tokenizer = None
 
-app = FastAPI(title="Medical QA Gemma API", version="0.1.0")
+app = FastAPI(title="Medical QA Gemma API (Merged Model)", version="0.2.0")
 
 # --- CORS (Cross-Origin Resource Sharing) ---
-# Allows your frontend (served from a different port/origin) to communicate with the API
 origins = [
     "http://localhost",
-    "http://localhost:8000", # Default FastAPI
-    "null", # For local file:// access (needed for standalone HTML)
-    # Add any other origins if you deploy elsewhere
+    "http://localhost:8000",
+    "null", # For local file:// access
 ]
 
 app.add_middleware(
@@ -37,18 +34,27 @@ app.add_middleware(
 # --- Pydantic Models for Request and Response ---
 class QuestionRequest(BaseModel):
     question: str
-    max_new_tokens: int = 250 # Max tokens for the answer
+    max_new_tokens: int = 250
 
 class AnswerResponse(BaseModel):
     question: str
     answer: str
-    # debug_prompt: str # Optional: to see the full prompt sent to the model
 
 # --- Model Loading Function (called at startup) ---
 @app.on_event("startup")
 async def load_model_and_tokenizer():
     global model, tokenizer
-    print(f"Loading base model: {BASE_MODEL_ID}")
+    
+    script_dir = os.path.dirname(__file__)
+    absolute_model_path = os.path.join(script_dir, MERGED_MODEL_PATH)
+    
+    print(f"Attempting to load merged model and tokenizer from: {absolute_model_path}")
+
+    if not os.path.isdir(absolute_model_path):
+        error_msg = f"Model directory not found at {absolute_model_path}. Please ensure it contains the merged model files (e.g., model.safetensors, config.json, tokenizer.model)."
+        print(error_msg)
+        # Raise an error to prevent FastAPI from starting incorrectly if model is essential
+        raise RuntimeError(error_msg)
 
     # Quantization config (optional, for saving memory)
     # If you have issues or enough VRAM, you can remove `quantization_config`
@@ -59,64 +65,55 @@ async def load_model_and_tokenizer():
     )
 
     try:
-        tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL_ID)
-        
-        # Set pad_token to eos_token if not set
-        if tokenizer.pad_token is None:
-            tokenizer.pad_token = tokenizer.eos_token
-            
-        base_model = AutoModelForCausalLM.from_pretrained(
-            BASE_MODEL_ID,
-            quantization_config=bnb_config, # Comment out if not using quantization
-            device_map="auto", # Automatically uses CUDA if available
-            trust_remote_code=True, # Gemma might require this
+        print(f"Loading tokenizer from: {absolute_model_path}")
+        tokenizer = AutoTokenizer.from_pretrained(
+            absolute_model_path,
+            trust_remote_code=True # Good practice, though often not needed for standard models
         )
         
-        print(f"Loading PEFT adapter from: {ADAPTER_MODEL_PATH}")
-        # Ensure the adapter path is correct relative to this script
-        script_dir = os.path.dirname(__file__)
-        absolute_adapter_path = os.path.join(script_dir, ADAPTER_MODEL_PATH)
-        
-        if not os.path.exists(absolute_adapter_path):
-            raise FileNotFoundError(f"Adapter model directory not found at {absolute_adapter_path}. Make sure the path is correct.")
+        # Set pad_token to eos_token if not set (common for Gemma)
+        if tokenizer.pad_token is None:
+            print("Tokenizer `pad_token` not set. Setting it to `eos_token`.")
+            tokenizer.pad_token = tokenizer.eos_token
             
-        model = PeftModel.from_pretrained(base_model, absolute_adapter_path)
-        model = model.merge_and_unload() # Optional: merge LoRA weights for faster inference, consumes more VRAM initially
+        print(f"Loading merged model from: {absolute_model_path}")
+        model = AutoModelForCausalLM.from_pretrained(
+            absolute_model_path,
+            quantization_config=bnb_config, # Comment out if not using quantization
+            device_map="auto",              # Automatically uses CUDA if available
+            trust_remote_code=True,         # For custom model code, if any
+            # torch_dtype=torch.bfloat16    # If not using BNB, consider this for memory/speed
+        )
+        
         model.eval() # Set model to evaluation mode
 
-        print("Model and tokenizer loaded successfully.")
+        print("Merged model and tokenizer loaded successfully.")
         
-        # Test inference (optional)
-        # test_prompt = "What is diabetes?"
+        # Optional: Test inference (uncomment to verify after loading)
+        # test_prompt = "What is the capital of France?"
         # messages = [{"role": "user", "content": test_prompt}]
         # formatted_prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         # inputs = tokenizer.encode(formatted_prompt, return_tensors="pt").to(model.device)
         # outputs = model.generate(input_ids=inputs, max_new_tokens=20)
-        # print("Test generation:", tokenizer.decode(outputs[0], skip_special_tokens=True))
+        # print("Test generation output:", tokenizer.decode(outputs[0], skip_special_tokens=True))
 
     except Exception as e:
-        print(f"Error loading model: {e}")
-        # You might want to raise the exception or handle it gracefully
-        # For now, we'll let FastAPI start, but endpoints will fail.
-        # raise RuntimeError(f"Failed to load model: {e}") from e
-        model = None # Ensure model is None if loading fails
+        print(f"ERROR: Failed to load model or tokenizer from {absolute_model_path}: {e}")
+        # Raising an exception here will prevent the server from starting if model loading fails.
+        # This is generally better than letting it start in a broken state.
+        model = None
         tokenizer = None
+        raise RuntimeError(f"Failed to load model: {e}") from e
 
-# --- API Endpoint ---
+
+# --- API Endpoint (remains the same as previous version) ---
 @app.post("/ask", response_model=AnswerResponse)
 async def ask_question(request: QuestionRequest):
     if model is None or tokenizer is None:
         raise HTTPException(status_code=503, detail="Model not loaded. Check server logs.")
 
     try:
-        # Gemma IT models expect a specific chat format.
-        # Format for Gemma:
-        # <start_of_turn>user
-        # {your_question}<end_of_turn>
-        # <start_of_turn>model
-        # The model will continue from here.
-        
-        # Using apply_chat_template is the recommended way
+        # Gemma IT models (and models fine-tuned from them) expect a specific chat format.
         messages = [
             {"role": "user", "content": request.question}
         ]
@@ -128,20 +125,17 @@ async def ask_question(request: QuestionRequest):
         print(f"Generating response for: {request.question}")
         # print(f"Full prompt being sent to model: \n{prompt}") # For debugging
 
-        with torch.no_grad(): # Important for inference
+        with torch.no_grad():
             outputs = model.generate(
                 **inputs,
                 max_new_tokens=request.max_new_tokens,
-                do_sample=True, # Set to False for deterministic output
-                temperature=0.7, # Adjust for creativity vs. factuality
+                do_sample=True,
+                temperature=0.7,
                 top_p=0.9,
                 eos_token_id=tokenizer.eos_token_id,
-                pad_token_id=tokenizer.pad_token_id # Ensure pad_token_id is set
+                pad_token_id=tokenizer.pad_token_id
             )
         
-        # Decode the generated tokens
-        # outputs[0] contains the full sequence (prompt + generation)
-        # We need to slice off the prompt part.
         input_length = inputs.input_ids.shape[1]
         generated_ids = outputs[0][input_length:]
         answer_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
@@ -151,7 +145,6 @@ async def ask_question(request: QuestionRequest):
         return AnswerResponse(
             question=request.question,
             answer=answer_text.strip()
-            # debug_prompt=prompt # Optional
         )
 
     except Exception as e:
@@ -160,9 +153,6 @@ async def ask_question(request: QuestionRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    # Make sure to run this from the `med_qa_gemma/backend/` directory
-    # Or adjust paths if running from `med_qa_gemma/`
-    print("Starting FastAPI server...")
-    print("Model loading will happen on the first request or at startup.")
-    print(f"IMPORTANT: Ensure your BASE_MODEL_ID ('{BASE_MODEL_ID}') is correct and ADAPTER_MODEL_PATH ('{ADAPTER_MODEL_PATH}') points to your LoRA files.")
+    print("Starting FastAPI server for Merged Medical QA Gemma...")
+    print(f"IMPORTANT: Ensure your MERGED_MODEL_PATH ('{MERGED_MODEL_PATH}') points to your directory containing model.safetensors and tokenizer files.")
     uvicorn.run(app, host="0.0.0.0", port=8000)
