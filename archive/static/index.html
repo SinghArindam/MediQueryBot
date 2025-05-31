@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Medical Q&A</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #answer { margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h1>Medical Question Answering</h1>
+    <input type="text" id="question" placeholder="Ask a medical question" style="width: 300px;">
+    <button onclick="askQuestion()">Ask</button>
+    <p id="answer"></p>
+
+    <script>
+        async function askQuestion() {
+            const question = document.getElementById("question").value;
+            try {
+                const response = await fetch('/ask', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({question: question})
+                });
+                const data = await response.json();
+                document.getElementById("answer").innerText = data.answer;
+            } catch (error) {
+                document.getElementById("answer").innerText = "Error: Could not get a response.";
+            }
+        }
+    </script>
+</body>
+</html>
