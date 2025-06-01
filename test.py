@@ -1,46 +1,48 @@
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
+from pydantic import BaseModel
+from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 
-# Path to the merged fine-tuned model
+app = FastAPI()
+
+# Load tokenizer and model at startup
 merged_model_path = "merged_gemma3_medical"  # Replace with your merged model path
-
-# Define quantization configuration (4-bit)
-quant_config = BitsAndBytesConfig(
-    load_in_4bit=True,  # Enable 4-bit quantization
-    bnb_4bit_quant_type="nf4",  # Normalizing 4-bit quantization
-    bnb_4bit_compute_dtype=torch.float16,  # Compute in float16 for efficiency
-    bnb_4bit_use_double_quant=True  # Double quantization for better accuracy
-)
-
-# Load tokenizer
 tokenizer = AutoTokenizer.from_pretrained(merged_model_path)
-
-# Load merged model with quantization
 model = AutoModelForCausalLM.from_pretrained(
     merged_model_path,
-    quantization_config=quant_config,
-    device_map="auto",  # Automatically map to GPU/CPU
-    torch_dtype=torch.float16
+    torch_dtype=torch.float16,
+    device_map="auto"
 )
 
-# Example medical QA query
-query = "What are the common symptoms of Type 2 Diabetes?"
+# Define request model
+class QueryRequest(BaseModel):
+    question: str
 
-# Prepare input prompt (adjust based on your fine-tuning prompt format)
-prompt = f"Question: {query}\nAnswer:"
+@app.get("/", response_class=HTMLResponse)
+async def serve_html():
+    with open("index.html", "r") as file:
+        html_content = file.read()
+    return HTMLResponse(content=html_content)
 
-# Tokenize input
-inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+@app.post("/query")
+async def get_answer(query: QueryRequest):
+    try:
+        # Prepare input prompt
+        prompt = f"Question: {query.question}\nAnswer:"
+        inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
 
-# Generate response
-outputs = model.generate(
-    **inputs,
-    max_new_tokens=200,  # Adjust based on desired response length
-    do_sample=True,  # Enable sampling for more natural responses
-    temperature=0.7,  # Adjust for response creativity
-    top_p=0.9  # Nucleus sampling
-)
+        # Generate response
+        outputs = model.generate(
+            **inputs,
+            max_new_tokens=200,
+            do_sample=True,
+            temperature=0.7,
+            top_p=0.9
+        )
 
-# Decode and print response
-response = tokenizer.decode(outputs[0], skip_special_tokens=True)
-print("Response:", response)
+        # Decode response
+        response = tokenizer.decode(outputs[0], skip_special_tokens=True)
+        return {"answer": response}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
