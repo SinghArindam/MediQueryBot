@@ -1,2 +1,3 @@
 .venv
+merged_gemma3_medical/model.safetensors
 finetuned_model/model.safetensors

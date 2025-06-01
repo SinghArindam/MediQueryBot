@@ -8,7 +8,7 @@ from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 
 # --- Configuration ---
 # Path to the directory containing your MERGED .safetensors model and tokenizer files
-MERGED_MODEL_PATH = "../fintuned_model" # Path relative to this main.py file
+MERGED_MODEL_PATH = "merged_gemma3_medical\\model.safetensors" # Path relative to this main.py file
 
 # --- Model Loading ---
 model = None
