@@ -141,7 +141,9 @@ POST /chats/{id}/ask          # {reply,latency,model_id}
 
 ## License
 
-MIT
+MIT License
+
+Copyright (c) 2025 SinghArindam
 
 ---
 
