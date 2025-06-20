@@ -1,3 +1,7 @@
 .venv
 merged_gemma3_medical/model.safetensors
 finetuned_model/model.safetensors
+__pycache__
+archive/merged_gemma3_medical/model.safetensors
+archive/finetuned_model/adapter_model.safetensors
+archive/finetuned_model/model.safetensors

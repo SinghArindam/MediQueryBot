@@ -1,192 +1,89 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Medical QA with Gemma</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: #f0f2f5;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            color: #333;
-        }
-        .container {
-            background-color: #ffffff;
-            padding: 30px 40px;
-            border-radius: 12px;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-            width: 90%;
-            max-width: 700px;
-            box-sizing: border-box;
-        }
-        h1 {
-            color: #1a73e8; /* Google Blue */
-            text-align: center;
-            margin-bottom: 25px;
-            font-weight: 500;
-        }
-        textarea {
-            width: 100%;
-            padding: 12px;
-            margin-bottom: 20px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            box-sizing: border-box;
-            font-size: 16px;
-            min-height: 100px;
-            resize: vertical;
-        }
-        button {
-            background-color: #1a73e8;
-            color: white;
-            padding: 12px 20px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: 500;
-            transition: background-color 0.3s ease;
-            display: block;
-            width: 100%;
-        }
-        button:hover {
-            background-color: #1558b0;
-        }
-        button:disabled {
-            background-color: #cccccc;
-            cursor: not-allowed;
-        }
-        .answer-area {
-            margin-top: 30px;
-            padding: 20px;
-            background-color: #f8f9fa;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            white-space: pre-wrap; /* Preserve line breaks */
-            word-wrap: break-word;
-            font-size: 15px;
-            line-height: 1.6;
-        }
-        .answer-area h3 {
-            margin-top: 0;
-            color: #333;
-            font-weight: 500;
-        }
-        .loader {
-            border: 4px solid #f3f3f3;
-            border-radius: 50%;
-            border-top: 4px solid #1a73e8;
-            width: 30px;
-            height: 30px;
-            animation: spin 1s linear infinite;
-            margin: 20px auto;
-            display: none; /* Hidden by default */
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        .error-message {
-            color: #d93025; /* Google Red */
-            background-color: #fce8e6;
-            border: 1px solid #fcc6c0;
-            padding: 10px;
-            border-radius: 8px;
-            margin-top: 20px;
-            text-align: center;
-        }
-    </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MediQueryBot</title>
+
+<script src="https://cdn.tailwindcss.com?plugins=typography,forms"></script>
+<link rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
+<!-- Markdown renderer -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+<style>
+.bg-gold  {background:#ffd700;}
+.text-gold{color:#ffd700;}
+.bg-chat-area{background:#101010;}
+
+.chat-glow{position:relative;}
+.chat-glow::before{
+  content:"";position:absolute;inset:0;border-radius:inherit;
+  background:linear-gradient(45deg,red,blue,green,gold,red);
+  background-size:400% 400%;filter:blur(12px);z-index:-1;
+  animation:glowMove 12s linear infinite;
+}
+@keyframes glowMove{0%{background-position:0 0;}100%{background-position:400% 0;}}
+</style>
 </head>
-<body>
-    <div class="container">
-        <h1>Medical Question Answering</h1>
-        <p>Ask a medical question to the fine-tuned Gemma model.</p>
-        
-        <textarea id="questionInput" placeholder="e.g., What are the common symptoms of influenza?"></textarea>
-        <button id="askButton" onclick="askQuestion()">Ask Gemma</button>
 
-        <div class="loader" id="loader"></div>
-        
-        <div id="errorDisplay" class="error-message" style="display:none;"></div>
+<body class="h-full bg-black text-white flex flex-col overflow-hidden">
 
-        <div class="answer-area" id="answerArea" style="display:none;">
-            <h3>Answer:</h3>
-            <p id="answerText"></p>
-        </div>
+<!-- Header -->
+<header class="py-3 border-b border-white/10 bg-chat-area flex justify-center items-center">
+  <img src="/static/logo.png" alt="logo" class="h-8 mr-2"/>
+  <h1 class="text-2xl font-semibold">
+    <span class="text-gold">MediQueryBot</span>
+    <span class="text-white/80 hidden sm:inline">– Your Medical Query Assistant</span>
+  </h1>
+</header>
+
+<!-- Main -->
+<main class="flex flex-1 overflow-hidden">
+  <!-- Sidebar -->
+  <aside class="w-64 border-r border-white/10 p-4 flex flex-col">
+    <button id="new-chat-btn"
+            class="mb-4 py-2 w-full rounded bg-gold text-black font-semibold hover:opacity-90">
+      ＋ New Chat
+    </button>
+    <ul id="chat-list" class="space-y-2 flex-1 overflow-y-auto"></ul>
+  </aside>
+
+  <!-- Chat area -->
+  <section class="flex-1 flex flex-col items-center justify-center p-4">
+    <div class="w-full max-w-2xl h-full chat-glow rounded-3xl animate__animated animate__fadeInUp p-[3px]">
+      <div class="w-full h-full flex flex-col bg-chat-area rounded-3xl overflow-hidden">
+        <!-- card header -->
+        <header class="px-6 py-4 border-b border-white/10">
+          <h2 class="text-xl font-semibold text-gold">🩺 MediQueryBot</h2>
+        </header>
+
+        <!-- messages -->
+        <div id="messages"
+             class="flex-1 overflow-y-auto px-6 py-4 space-y-4 prose
+                    prose-sm max-w-none scroll-smooth"></div>
+
+        <!-- input -->
+        <form id="chat-form" class="px-6 py-4 border-t border-white/10 flex gap-2">
+          <input id="user-input" autocomplete="off" placeholder="Ask your question…"
+                 class="flex-1 rounded-xl border border-white/20 bg-black/70
+                        px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gold"/>
+          <button id="send-btn" type="button"
+                  class="shrink-0 px-4 py-2 rounded-xl bg-blue-600
+                         hover:bg-blue-700 focus:ring-2 focus:ring-blue-400">
+            ▶︎
+          </button>
+        </form>
+      </div>
     </div>
+  </section>
+</main>
 
-    <script>
-        const questionInput = document.getElementById('questionInput');
-        const askButton = document.getElementById('askButton');
-        const answerArea = document.getElementById('answerArea');
-        const answerText = document.getElementById('answerText');
-        const loader = document.getElementById('loader');
-        const errorDisplay = document.getElementById('errorDisplay');
+<!-- Footer -->
+<footer class="py-2 text-center text-xs border-t border-white/10">
+  Made with ❤ by <span class="text-gold">Arindam Singh</span>
+</footer>
 
-        // Configuration
-        const API_URL = 'http://localhost:8000/ask'; // FastAPI backend URL
-
-        async function askQuestion() {
-            const question = questionInput.value.trim();
-            if (!question) {
-                alert('Please enter a question.');
-                return;
-            }
-
-            askButton.disabled = true;
-            loader.style.display = 'block';
-            answerArea.style.display = 'none';
-            errorDisplay.style.display = 'none';
-            answerText.textContent = '';
-
-            try {
-                const response = await fetch(API_URL, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ 
-                        question: question,
-                        max_new_tokens: 300 // You can adjust this
-                    }),
-                });
-
-                if (!response.ok) {
-                    let errorMsg = `Error: ${response.status} ${response.statusText}`;
-                    try {
-                        const errorData = await response.json();
-                        errorMsg = `Error: ${errorData.detail || errorMsg}`;
-                    } catch (e) { /* Ignore if error response is not JSON */ }
-                    throw new Error(errorMsg);
-                }
-
-                const data = await response.json();
-                answerText.textContent = data.answer;
-                answerArea.style.display = 'block';
-
-            } catch (error) {
-                console.error('Failed to get answer:', error);
-                errorDisplay.textContent = `Failed to get answer: ${error.message}. Please ensure the backend server is running and accessible. Check console for more details.`;
-                errorDisplay.style.display = 'block';
-            } finally {
-                askButton.disabled = false;
-                loader.style.display = 'none';
-            }
-        }
-
-        // Optional: Allow pressing Enter in textarea to submit (Shift+Enter for new line)
-        questionInput.addEventListener('keypress', function(event) {
-            if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault(); // Prevent default Enter behavior (new line)
-                askQuestion();
-            }
-        });
-    </script>
+<script src="/static/script.js" defer></script>
 </body>
 </html>

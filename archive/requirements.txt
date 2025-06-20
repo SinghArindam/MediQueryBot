@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+torch
+transformers
+peft
+accelerate
+bitsandbytes  # For 4-bit quantization, optional if you have enough VRAM
+sentencepiece # Often needed for Gemma tokenizers
+pydantic
+mlx-lm

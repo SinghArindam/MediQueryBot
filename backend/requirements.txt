@@ -1,0 +1,10 @@
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+python-dotenv==1.0.1
+
+# LLM stack
+transformers>=4.51.0   # Qwen3 requires ≥4.51.0 [1]
+accelerate
+torch  # 2 × GPU vRAM ≥8 GB is ideal, CPU works but is slow
+hf_xet
+hf_transfer

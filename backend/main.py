@@ -1,158 +1,144 @@
-import os
-import torch
+"""
+MediQueryBot · FastAPI backend
+– Qwen3-0.6B (local, CPU/GPU)
+– multi-chat persistence  (1 JSON per chat)
+– latency saved and returned
+"""
+
+from __future__ import annotations
+import json, uuid, asyncio, time
+from datetime import datetime
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException
+from fastapi import Path as FPath
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
-# PEFT is no longer imported here as we load a merged model
 
-# --- Configuration ---
-# Path to the directory containing your MERGED .safetensors model and tokenizer files
-MERGED_MODEL_PATH = "merged_gemma3_medical\\model.safetensors" # Path relative to this main.py file
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
-# --- Model Loading ---
-model = None
-tokenizer = None
+# ───────────────────────────────────────────
+# 1.  Load model
+# ───────────────────────────────────────────
+MODEL_ID = "Qwen/Qwen3-0.6B"
+print("⏳ Loading Qwen3-0.6B …")
+tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
+model = AutoModelForCausalLM.from_pretrained(
+    MODEL_ID, torch_dtype="auto", device_map="auto"
+)
+print("✅ Model ready")
 
-app = FastAPI(title="Medical QA Gemma API (Merged Model)", version="0.2.0")
+SYS_PROMPT = (
+    "You are MediQueryBot, a helpful medical assistant. "
+    "Provide concise, evidence-based information. "
+    "Always finish with: "
+    "'This information is educational; not a substitute for professional advice.'"
+)
 
-# --- CORS (Cross-Origin Resource Sharing) ---
-origins = [
-    "http://localhost",
-    "http://localhost:8000",
-    "null", # For local file:// access
-]
+@torch.inference_mode()
+def qwen_chat(user: str) -> str:
+    tmpl = tokenizer.apply_chat_template(
+        [{"role":"system","content":SYS_PROMPT},
+         {"role":"user",  "content":user}],
+        tokenize=False,
+        add_generation_prompt=True,
+        enable_thinking=True,
+    )
+    inputs = tokenizer(tmpl, return_tensors="pt").to(model.device)
+    ids = model.generate(
+        **inputs,
+        max_new_tokens=768,
+        temperature=0.4,
+        do_sample=True
+    )
+    gen_ids = ids[0][inputs.input_ids.shape[-1]:]
+    return tokenizer.decode(gen_ids, skip_special_tokens=True).strip()
+
+# ───────────────────────────────────────────
+# 2.  Persistence helpers
+# ───────────────────────────────────────────
+ROOT      = Path(__file__).parent
+CHAT_DIR  = ROOT / "chats"
+CHAT_DIR.mkdir(exist_ok=True)
+_lock = asyncio.Lock()
+
+def _chat_path(cid:str)->Path: return CHAT_DIR / f"{cid}.json"
+
+def _load(cid:str)->dict:
+    fp=_chat_path(cid)
+    if not fp.exists():
+        raise HTTPException(404,"chat not found")
+    with fp.open("r",encoding="utf-8") as f:
+        return json.load(f)
+
+def _save(data:dict)->None:
+    with _chat_path(data["id"]).open("w",encoding="utf-8") as f:
+        json.dump(data,f,ensure_ascii=False,indent=2)
+
+def _list_chats()->list[dict]:
+    out=[]
+    for fp in CHAT_DIR.glob("*.json"):
+        with fp.open("r",encoding="utf-8") as f:
+            j=json.load(f)
+            title=next((m["content"] for m in j["messages"] if m["role"]=="user"),"Untitled")
+            out.append({"id":j["id"],"created_at":j["created_at"],
+                        "title":title[:40]+("…" if len(title)>40 else "")})
+    out.sort(key=lambda x:x["created_at"], reverse=True)
+    return out
+
+# ───────────────────────────────────────────
+# 3.  FastAPI app
+# ───────────────────────────────────────────
+app = FastAPI(title="MediQueryBot API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
 )
 
-# --- Pydantic Models for Request and Response ---
-class QuestionRequest(BaseModel):
-    question: str
-    max_new_tokens: int = 250
+FRONT = ROOT.parent / "frontend"
+app.mount("/static", StaticFiles(directory=FRONT), name="static")
 
-class AnswerResponse(BaseModel):
-    question: str
-    answer: str
+@app.get("/", include_in_schema=False)
+def root():
+    return FileResponse(FRONT / "index.html")
 
-# --- Model Loading Function (called at startup) ---
-@app.on_event("startup")
-async def load_model_and_tokenizer():
-    global model, tokenizer
-    
-    script_dir = os.path.dirname(__file__)
-    absolute_model_path = os.path.join(script_dir, MERGED_MODEL_PATH)
-    
-    print(f"Attempting to load merged model and tokenizer from: {absolute_model_path}")
+# pydantic
+class Msg(BaseModel): message:str
+class Info(BaseModel): id:str; created_at:str
 
-    if not os.path.isdir(absolute_model_path):
-        error_msg = f"Model directory not found at {absolute_model_path}. Please ensure it contains the merged model files (e.g., model.safetensors, config.json, tokenizer.model)."
-        print(error_msg)
-        # Raise an error to prevent FastAPI from starting incorrectly if model is essential
-        raise RuntimeError(error_msg)
+# ── routes ─────────────────────────────────
+@app.post("/chats", response_model=Info)
+async def new_chat():
+    cid=uuid.uuid4().hex[:8]
+    data={"id":cid,"created_at":datetime.utcnow().isoformat(),"messages":[]}
+    async with _lock: _save(data)
+    return data
 
-    # Quantization config (optional, for saving memory)
-    # If you have issues or enough VRAM, you can remove `quantization_config`
-    bnb_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_compute_dtype=torch.bfloat16 # or torch.float16
-    )
+@app.get("/chats")
+async def list_chats(): return _list_chats()
 
-    try:
-        print(f"Loading tokenizer from: {absolute_model_path}")
-        tokenizer = AutoTokenizer.from_pretrained(
-            absolute_model_path,
-            trust_remote_code=True # Good practice, though often not needed for standard models
-        )
-        
-        # Set pad_token to eos_token if not set (common for Gemma)
-        if tokenizer.pad_token is None:
-            print("Tokenizer `pad_token` not set. Setting it to `eos_token`.")
-            tokenizer.pad_token = tokenizer.eos_token
-            
-        print(f"Loading merged model from: {absolute_model_path}")
-        model = AutoModelForCausalLM.from_pretrained(
-            absolute_model_path,
-            quantization_config=bnb_config, # Comment out if not using quantization
-            device_map="auto",              # Automatically uses CUDA if available
-            trust_remote_code=True,         # For custom model code, if any
-            # torch_dtype=torch.bfloat16    # If not using BNB, consider this for memory/speed
-        )
-        
-        model.eval() # Set model to evaluation mode
+@app.get("/chats/{cid}/history")
+async def history(cid:str=FPath(...,min_length=1)):
+    async with _lock: return _load(cid)["messages"]
 
-        print("Merged model and tokenizer loaded successfully.")
-        
-        # Optional: Test inference (uncomment to verify after loading)
-        # test_prompt = "What is the capital of France?"
-        # messages = [{"role": "user", "content": test_prompt}]
-        # formatted_prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-        # inputs = tokenizer.encode(formatted_prompt, return_tensors="pt").to(model.device)
-        # outputs = model.generate(input_ids=inputs, max_new_tokens=20)
-        # print("Test generation output:", tokenizer.decode(outputs[0], skip_special_tokens=True))
+@app.post("/chats/{cid}/ask")
+async def ask(msg:Msg, cid:str=FPath(...,min_length=1)):
+    async with _lock: data=_load(cid)
 
-    except Exception as e:
-        print(f"ERROR: Failed to load model or tokenizer from {absolute_model_path}: {e}")
-        # Raising an exception here will prevent the server from starting if model loading fails.
-        # This is generally better than letting it start in a broken state.
-        model = None
-        tokenizer = None
-        raise RuntimeError(f"Failed to load model: {e}") from e
+    t0=time.perf_counter()
+    answer=await asyncio.get_event_loop().run_in_executor(None, qwen_chat, msg.message)
+    latency=round(time.perf_counter()-t0,1)
 
-
-# --- API Endpoint (remains the same as previous version) ---
-@app.post("/ask", response_model=AnswerResponse)
-async def ask_question(request: QuestionRequest):
-    if model is None or tokenizer is None:
-        raise HTTPException(status_code=503, detail="Model not loaded. Check server logs.")
-
-    try:
-        # Gemma IT models (and models fine-tuned from them) expect a specific chat format.
-        messages = [
-            {"role": "user", "content": request.question}
+    async with _lock:
+        data=_load(cid)
+        data["messages"] += [
+            {"role":"user","content":msg.message},
+            {"role":"assistant","content":answer,"latency":latency}
         ]
-        # add_generation_prompt=True adds the <start_of_turn>model token
-        prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-        
-        inputs = tokenizer(prompt, return_tensors="pt", padding=True, truncation=True).to(model.device)
-        
-        print(f"Generating response for: {request.question}")
-        # print(f"Full prompt being sent to model: \n{prompt}") # For debugging
+        _save(data)
 
-        with torch.no_grad():
-            outputs = model.generate(
-                **inputs,
-                max_new_tokens=request.max_new_tokens,
-                do_sample=True,
-                temperature=0.7,
-                top_p=0.9,
-                eos_token_id=tokenizer.eos_token_id,
-                pad_token_id=tokenizer.pad_token_id
-            )
-        
-        input_length = inputs.input_ids.shape[1]
-        generated_ids = outputs[0][input_length:]
-        answer_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
-        
-        print(f"Raw answer: {answer_text}")
-
-        return AnswerResponse(
-            question=request.question,
-            answer=answer_text.strip()
-        )
-
-    except Exception as e:
-        print(f"Error during inference: {e}")
-        raise HTTPException(status_code=500, detail=f"Error during inference: {str(e)}")
-
-if __name__ == "__main__":
-    import uvicorn
-    print("Starting FastAPI server for Merged Medical QA Gemma...")
-    print(f"IMPORTANT: Ensure your MERGED_MODEL_PATH ('{MERGED_MODEL_PATH}') points to your directory containing model.safetensors and tokenizer files.")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    return {"reply":answer,"latency":latency}
