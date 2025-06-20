@@ -1,77 +1,145 @@
-# 🩺 MediQueryBot
+<img src="https://r2cdn.perplexity.ai/pplx-full-logo-primary-dark%402x.png" class="logo" width="120"/>
 
-Glass-morphic medical chatbot powered by **Custom Fine-Tuned (LoRA) LLM**  
-– Multiple chats • Markdown answers • Collapsible reasoning • Latency footer
+# 🩺 MediQueryBot [Live](https://huggingface.co/spaces/ArindamSingh/MediQuery) | [GitHub](https://github.com/SinghArindam/MediQueryBot)
 
----
-
-## ✨ Features
-| Feature | Description |
-| --- | --- |
-| Custom Fine-Tuned (LoRA) LLM | Runs locally via `transformers` (CPU wheel, no API key). |
-| Markdown rendering | Headlines, lists, code blocks, tables. |
-| Multi-chat sidebar | Every chat stored as its own JSON file (`backend/chats/<id>.json`). |
-| Reasoning reveal | Model’s `<think>` content collapses under “💭 Reasoning”. |
-| Latency tracking | Response time is saved and shown. |
-| AMOLED theme | pure-black UI with animated red→blue→green→gold halo. |
+A sleek, glass-morphic medical-query chatbot that can switch between Custom Finetuned LLMs, Hugging Face models (Qwen-3 0.6 B, Gemma3-1 B), locally-quantised GGUF models served with llama.cpp, and Google Gemini-Flash 2.5.
+Mobile-responsive, supports multiple simultaneous chats, Markdown answers, collapsible reasoning, latency tracking and an AMOLED dark theme with an animated gradient glow.
 
 ---
 
-## 🏃‍♂️ Quick start (local)
+## Journey \& version history
+
+| Version | Date (2025) | Highlights |
+| :-- | :-- | :-- |
+| **v1.0** | Jun 14 | First public release – Qwen-3 0.6 B + glass-morphic UI |
+| **v1.1** | Jun 15 | Multi-chat sidebar, per-chat JSON persistence |
+| **v1.2** | Jun 16 | Latency timer and footer stored with messages |
+| **v1.3** | Jun 17 | Markdown rendering, collapsible `<think>` reasoning |
+| **v1.4** | Jun 18 | Multi-model: Gemma-1 B, Mistral-7B Q4_K_M (llama.cpp) |
+| **v1.5** | Jun 19 | Gemini API integration + `/models` endpoint for dynamic dropdown |
+| **v1.6** | Jun 20 | Fully responsive mobile layout, sidebar ➜ ribbon |
+
+---
+
+## Features
+
+- **Multi-LLM switcher** – choose Qwen, Gemma, any GGUF quant (auto-downloaded) or Gemini via API key.
+- **Multi-chat** – separate histories saved as `backend/chats/<id>.json`.
+- **Markdown answers** – headings, lists, code blocks, tables.
+- **💭 Reasoning toggle** – hides chain-of-thought until user expands it.
+- **Latency footer** – “Responded in X s” shown and logged.
+- **AMOLED UI** – pure-black background, glass card, animated red→blue→green→gold glow.
+- **100 % responsive** – desktop sidebar collapses into a top ribbon on ≤ 640 px.
+
+---
+
+## Directory structure
 
 ```
+backend/
+  main.py              FastAPI + model loader
+  requirements.txt
+  models/              ⬇ GGUF files auto-downloaded here
+  chats/               ↳ per-chat JSON histories
+frontend/
+  index.html           glass UI + responsive CSS
+  script.js            dynamic dropdown, Markdown, latency
+  logo.png             replace with your own PNG
+Dockerfile
+.env.example           set GEMINI_API_KEY here
+README.md
+```
 
-git clone https://github.com/you/med-query-bot.git
-cd med-query-bot
 
-# build + run
+---
 
+## Quick start
+
+### 1 Docker (recommended)
+
+```bash
+git clone https://github.com/yourname/mediquerybot.git
+cd mediquerybot
+cp .env.example .env          # add GEMINI_API_KEY if you have one
 docker build -t mediquery .
 docker run -p 7860:7860 mediquery
-
-# → http://localhost:7860
-
+# open http://localhost:7860
 ```
 
-### Python dev mode
 
-```
+### 2 Python dev mode
 
-python -m venv .venv \&\& source .venv/bin/activate
+```bash
+python -m venv .venv && source .venv/bin/activate
 pip install -r backend/requirements.txt
 uvicorn backend.main:app --reload
-
-```
-Open `frontend/index.html` directly or serve it with any static server.
-
----
-
-## 🚀 Deploy to Hugging Face Spaces
-
-1. Create a new **“Docker”** Space.  
-2. Push the whole repo (`git push`).  
-3. The Space builds automatically; first boot downloads the ~1.2 GB model.
-
-No tokens required; Custom Fine-Tuned (LoRA) LLM.
-
----
-
-## 📂 Project structure
+# then   cd frontend && python -m http.server
 ```
 
-backend/         FastAPI + model loader
-frontend/        HTML + Tailwind + JS (marked.js)
-Dockerfile       Container for Spaces / local
+
+---
+
+## Deployment on Hugging Face Spaces (Docker runtime)
+
+1. Create a new **Docker** Space.
+2. Push the entire repo (`git push`).
+3. Add `GEMINI_API_KEY` in the Space secrets if you want Gemini.
+First build downloads HF checkpoints (~1–2 GB) and the selected GGUF file.
+
+---
+
+## Configuration
+
+| Task | How |
+| :-- | :-- |
+| Add / remove models | Edit `MODEL_REGISTRY` in `backend/main.py`. |
+| Swap a GGUF file | Drop it in `backend/models/` and update its dict entry. |
+| Change default model | `DEFAULT_MODEL` constant in `main.py`. |
+| Restrict CORS | Edit `allow_origins` when instantiating `CORSMiddleware`. |
+| Hide thinking entirely | Remove `enable_thinking=True` + `<think>` stripper. |
+
+
+---
+
+## Environment variables
+
+| Variable | Purpose |
+| :-- | :-- |
+| `GEMINI_API_KEY` | Enables Gemini calls. If absent, Gemini is hidden from `/models`. |
+
+Put them in `.env` (read via python-dotenv) or set in your orchestration UI.
+
+---
+
+## API summary
 
 ```
+GET  /models                  # [{id,label}]
+POST /chats?model_id=...      # → {id,created_at,model_id}
+GET  /chats                   # sidebar list
+GET  /chats/{id}/history      # full message array
+POST /chats/{id}/ask          # {reply,latency,model_id}
+```
+
 
 ---
 
-## 🔧 Config & tips
-* Change `MODEL_ID` in `backend/main.py` to any Custom Fine-Tuned (LoRA) LLM model that fits RAM.  
-* Restrict CORS (`allow_origins`) before going public.  
-* Each assistant turn is stored with `"latency": seconds` – useful for analytics.
+## Screenshots
+
+| Desktop | Mobile |
+| ![DeskTop](image.png) | :-- |
+|  |  |
+
 
 ---
 
-Made with ❤️ by **Arindam Singh**
+## License
+
+MIT
+
+---
+
+Made with ❤ by **Arindam Singh** – PRs and issues welcome!
+
+<div style="text-align: center">⁂</div>
+
