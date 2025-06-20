@@ -127,9 +127,15 @@ POST /chats/{id}/ask          # {reply,latency,model_id}
 ## Screenshots
 
 | Desktop | Mobile |
-| ![DeskTop](image.png) | :-- |
+| :-- | :-- |
 |  |  |
 
+
+### DeskTop
+![DeskTop](image.png)
+
+### Mobile
+![Mobile](image.png)
 
 ---
 
