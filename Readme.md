@@ -145,7 +145,7 @@ MIT
 
 ---
 
-Made with ❤ by **Arindam Singh** – PRs and issues welcome!
+Made with ❤ by **Arindam Singh**!
 
 <div style="text-align: center">⁂</div>
 
