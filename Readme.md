@@ -146,6 +146,3 @@ Copyright (c) 2025 SinghArindam
 ---
 
 Made with ❤ by **Arindam Singh**!
-
-<div style="text-align: center">⁂</div>
-
