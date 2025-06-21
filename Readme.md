@@ -1,5 +1,3 @@
-<img src="https://r2cdn.perplexity.ai/pplx-full-logo-primary-dark%402x.png" class="logo" width="120"/>
-
 # 🩺 MediQueryBot [ [Live](https://huggingface.co/spaces/ArindamSingh/MediQuery) | [GitHub](https://github.com/SinghArindam/MediQueryBot) ]
 
 A sleek, glass-morphic medical-query chatbot that can switch between Custom Finetuned LLMs, Hugging Face models (Qwen-3 0.6 B, Gemma3-1 B), locally-quantised GGUF models served with llama.cpp, and Google Gemini-Flash 2.5.
