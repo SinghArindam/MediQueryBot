@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MediBot - AI Teleconsultation Assistant</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+        
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: #f0f7ff;
+        }
+        
+        .pulse-animation {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(74, 144, 226, 0.7);
+            }
+            70% {
+                box-shadow: 0 0 0 10px rgba(74, 144, 226, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(74, 144, 226, 0);
+            }
+        }
+        
+        .typing-indicator {
+            display: flex;
+            padding: 8px 12px;
+        }
+        
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            margin: 0 2px;
+            background-color: #4a90e2;
+            border-radius: 50%;
+            opacity: 0;
+            animation: typingAnimation 1.4s infinite ease-in-out;
+        }
+        
+        .typing-dot:nth-child(1) {
+            animation-delay: 0s;
+        }
+        
+        .typing-dot:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+        
+        .typing-dot:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+        
+        @keyframes typingAnimation {
+            0% {
+                opacity: 0;
+                transform: translateY(0);
+            }
+            50% {
+                opacity: 0.8;
+                transform: translateY(-5px);
+            }
+            100% {
+                opacity: 0;
+                transform: translateY(0);
+            }
+        }
+        
+        .prescription-card {
+            background: linear-gradient(135deg, #f5f7fa 0%, #e4e8eb 100%);
+            border-left: 4px solid #4a90e2;
+        }
+        
+        .chat-container {
+            height: calc(100vh - 200px);
+        }
+        
+        @media (max-width: 640px) {
+            .chat-container {
+                height: calc(100vh - 160px);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="min-h-screen flex flex-col">
+        <!-- Header -->
+        <header class="bg-white shadow-sm py-4">
+            <div class="container mx-auto px-4 flex justify-between items-center">
+                <div class="flex items-center">
+                    <div class="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold mr-3">MB</div>
+                    <h1 class="text-xl font-bold text-gray-800">MediBot</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button id="darkModeToggle" class="p-2 rounded-full hover:bg-gray-100">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                        </svg>
+                    </button>
+                    <button id="helpBtn" class="p-2 rounded-full hover:bg-gray-100">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-grow container mx-auto px-4 py-6">
+            <div class="bg-white rounded-xl shadow-md overflow-hidden">
+                <div class="flex flex-col md:flex-row">
+                    <!-- Patient Info Sidebar -->
+                    <div class="w-full md:w-1/4 bg-gray-50 p-4 border-r border-gray-200">
+                        <div class="mb-6">
+                            <h2 class="text-lg font-semibold text-gray-700 mb-3">Patient Information</h2>
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-500">Name</label>
+                                    <input type="text" id="patientName" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border" placeholder="Enter patient name">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-500">Age</label>
+                                    <input type="number" id="patientAge" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border" placeholder="Enter age">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-500">Gender</label>
+                                    <select id="patientGender" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border">
+                                        <option value="">Select</option>
+                                        <option value="male">Male</option>
+                                        <option value="female">Female</option>
+                                        <option value="other">Other</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-500">Medical History</label>
+                                    <textarea id="patientHistory" rows="3" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border" placeholder="Any known conditions or allergies"></textarea>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-6">
+                            <h2 class="text-lg font-semibold text-gray-700 mb-3">Vital Signs</h2>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-500">BP (mmHg)</label>
+                                    <input type="text" id="patientBP" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border" placeholder="120/80">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-500">Temp (°F)</label>
+                                    <input type="text" id="patientTemp" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border" placeholder="98.6">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-500">Pulse (bpm)</label>
+                                    <input type="number" id="patientPulse" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border" placeholder="72">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-500">SpO2 (%)</label>
+                                    <input type="number" id="patientSpO2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border" placeholder="98">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <button id="savePatientBtn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-md transition duration-150 ease-in-out">
+                            Save Patient Info
+                        </button>
+                    </div>
+                    
+                    <!-- Chat Area -->
+                    <div class="w-full md:w-3/4 flex flex-col">
+                        <div class="p-4 border-b border-gray-200 flex justify-between items-center">
+                            <h2 class="text-lg font-semibold text-gray-700">Consultation</h2>
+                            <div class="flex space-x-2">
+                                <button id="newConsultationBtn" class="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 py-1 px-3 rounded-md transition duration-150 ease-in-out">
+                                    New Consultation
+                                </button>
+                                <button id="exportBtn" class="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 py-1 px-3 rounded-md transition duration-150 ease-in-out">
+                                    Export
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div id="chatContainer" class="chat-container overflow-y-auto p-4 space-y-4">
+                            <!-- Chat messages will appear here -->
+                            <div class="text-center py-10">
+                                <div class="mx-auto w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center mb-4">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                </div>
+                                <h3 class="text-lg font-medium text-gray-700 mb-1">Welcome to MediBot</h3>
+                                <p class="text-gray-500">Start by entering patient information and describing their symptoms.</p>
+                                <button id="startVoiceBtn" class="mt-4 bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-6 rounded-full transition duration-150 ease-in-out flex items-center mx-auto">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                                    </svg>
+                                    Start Voice Consultation
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Input Area -->
+                        <div class="p-4 border-t border-gray-200">
+                            <div class="flex items-center space-x-2">
+                                <button id="voiceBtn" class="p-2 rounded-full bg-blue-100 text-blue-600 hover:bg-blue-200 transition duration-150 ease-in-out">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                                    </svg>
+                                </button>
+                                <input type="text" id="userInput" class="flex-grow rounded-full border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Describe symptoms or ask a question...">
+                                <button id="sendBtn" class="p-2 rounded-full bg-blue-500 text-white hover:bg-blue-600 transition duration-150 ease-in-out">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                                    </svg>
+                                </button>
+                            </div>
+                            <div class="mt-2 text-xs text-gray-500 flex justify-between">
+                                <span>MediBot does not replace professional medical advice</span>
+                                <button id="emergencyBtn" class="text-red-500 hover:text-red-700 font-medium">Emergency Help</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Help Modal -->
+    <div id="helpModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold text-gray-800">Help & Instructions</h3>
+                <button id="closeHelpModal" class="text-gray-500 hover:text-gray-700">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <div class="space-y-4 text-gray-600">
+                <div>
+                    <h4 class="font-medium text-gray-800 mb-1">Voice Consultation</h4>
+                    <p>Click the microphone button to start speaking. Describe your symptoms clearly and in detail for better diagnosis.</p>
+                </div>
+                <div>
+                    <h4 class="font-medium text-gray-800 mb-1">Text Consultation</h4>
+                    <p>Type your symptoms or questions in the input field. Be as specific as possible about duration, severity, and other details.</p>
+                </div>
+                <div>
+                    <h4 class="font-medium text-gray-800 mb-1">Patient Information</h4>
+                    <p>Fill out the patient details on the left for more accurate medical advice tailored to age, gender, and medical history.</p>
+                </div>
+                <div>
+                    <h4 class="font-medium text-gray-800 mb-1">Disclaimer</h4>
+                    <p>MediBot provides preliminary health information only. Always consult a healthcare professional for proper diagnosis and treatment.</p>
+                </div>
+            </div>
+            <div class="mt-6 flex justify-end">
+                <button id="gotItBtn" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md transition duration-150 ease-in-out">
+                    Got it, thanks!
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Emergency Modal -->
+    <div id="emergencyModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold text-gray-800">Emergency Assistance</h3>
+                <button id="closeEmergencyModal" class="text-gray-500 hover:text-gray-700">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <div class="space-y-4 text-gray-600">
+                <div class="bg-red-50 border-l-4 border-red-500 p-4">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 text-red-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm text-red-700">
+                                <span class="font-bold">Warning:</span> For life-threatening emergencies, call your local emergency number immediately.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <h4 class="font-medium text-gray-800 mb-1">Emergency Numbers</h4>
+                    <ul class="list-disc pl-5 space-y-1">
+                        <li>United States: 911</li>
+                        <li>United Kingdom: 999 or 112</li>
+                        <li>European Union: 112</li>
+                        <li>Australia: 000</li>
+                        <li>India: 102 or 108</li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="font-medium text-gray-800 mb-1">Poison Control</h4>
+                    <p>US: 1-800-222-1222</p>
+                </div>
+                <div>
+                    <h4 class="font-medium text-gray-800 mb-1">Mental Health Support</h4>
+                    <p>US: 988 Suicide & Crisis Lifeline</p>
+                </div>
+            </div>
+            <div class="mt-6 flex justify-end space-x-3">
+                <button id="cancelEmergencyBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-md transition duration-150 ease-in-out">
+                    Cancel
+                </button>
+                <button id="callEmergencyBtn" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-md transition duration-150 ease-in-out">
+                    Call Emergency Services
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const chatContainer = document.getElementById('chatContainer');
+        const userInput = document.getElementById('userInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const voiceBtn = document.getElementById('voiceBtn');
+        const startVoiceBtn = document.getElementById('startVoiceBtn');
+        const helpBtn = document.getElementById('helpBtn');
+        const helpModal = document.getElementById('helpModal');
+        const closeHelpModal = document.getElementById('closeHelpModal');
+        const gotItBtn = document.getElementById('gotItBtn');
+        const emergencyBtn = document.getElementById('emergencyBtn');
+        const emergencyModal = document.getElementById('emergencyModal');
+        const closeEmergencyModal = document.getElementById('closeEmergencyModal');
+        const cancelEmergencyBtn = document.getElementById('cancelEmergencyBtn');
+        const callEmergencyBtn = document.getElementById('callEmergencyBtn');
+        const darkModeToggle = document.getElementById('darkModeToggle');
+        const savePatientBtn = document.getElementById('savePatientBtn');
+        const newConsultationBtn = document.getElementById('newConsultationBtn');
+        const exportBtn = document.getElementById('exportBtn');
+        
+        // State variables
+        let isRecording = false;
+        let mediaRecorder;
+        let audioChunks = [];
+        let consultationHistory = [];
+        let currentPatient = {};
+        let isDarkMode = false;
+        
+        // Initialize the app
+        function init() {
+            // Load dark mode preference from localStorage
+            if (localStorage.getItem('darkMode') === 'true') {
+                toggleDarkMode();
+            }
+            
+            // Load patient data if exists
+            if (localStorage.getItem('currentPatient')) {
+                currentPatient = JSON.parse(localStorage.getItem('currentPatient'));
+                populatePatientForm();
+            }
+            
+            // Load consultation history if exists
+            if (localStorage.getItem('consultationHistory')) {
+                consultationHistory = JSON.parse(localStorage.getItem('consultationHistory'));
+            }
+        }
+        
+        // Toggle dark mode
+        function toggleDarkMode() {
+            isDarkMode = !isDarkMode;
+            document.body.classList.toggle('bg-gray-900');
+            document.body.classList.toggle('text-white');
+            localStorage.setItem('darkMode', isDarkMode);
+        }
+        
+        // Populate patient form with saved data
+        function populatePatientForm() {
+            document.getElementById('patientName').value = currentPatient.name || '';
+            document.getElementById('patientAge').value = currentPatient.age || '';
+            document.getElementById('patientGender').value = currentPatient.gender || '';
+            document.getElementById('patientHistory').value = currentPatient.history || '';
+            document.getElementById('patientBP').value = currentPatient.bp || '';
+            document.getElementById('patientTemp').value = currentPatient.temp || '';
+            document.getElementById('patientPulse').value = currentPatient.pulse || '';
+            document.getElementById('patientSpO2').value = currentPatient.spo2 || '';
+        }
+        
+        // Save patient data
+        function savePatientData() {
+            currentPatient = {
+                name: document.getElementById('patientName').value,
+                age: document.getElementById('patientAge').value,
+                gender: document.getElementById('patientGender').value,
+                history: document.getElementById('patientHistory').value,
+                bp: document.getElementById('patientBP').value,
+                temp: document.getElementById('patientTemp').value,
+                pulse: document.getElementById('patientPulse').value,
+                spo2: document.getElementById('patientSpO2').value,
+                lastUpdated: new Date().toISOString()
+            };
+            
+            localStorage.setItem('currentPatient', JSON.stringify(currentPatient));
+            
+            // Show success message
+            addMessage('MediBot', 'Patient information saved successfully.', 'bot');
+            
+            // Scroll to bottom
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+        
+        // Start new consultation
+        function newConsultation() {
+            // Clear chat container
+            chatContainer.innerHTML = '';
+            
+            // Add welcome message
+            addMessage('MediBot', 'Starting new consultation. Please describe your symptoms.', 'bot');
+            
+            // Scroll to bottom
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+        
+        // Export consultation
+        function exportConsultation() {
+            if (consultationHistory.length === 0) {
+                addMessage('MediBot', 'No consultation history to export.', 'bot');
+                return;
+            }
+            
+            // Create a text version of the consultation
+            let exportText = `MediBot Consultation Report\n\n`;
+            exportText += `Patient: ${currentPatient.name || 'Not specified'}\n`;
+            exportText += `Age: ${currentPatient.age || 'Not specified'}\n`;
+            exportText += `Gender: ${currentPatient.gender || 'Not specified'}\n\n`;
+            exportText += `Consultation History:\n\n`;
+            
+            consultationHistory.forEach((consultation, index) => {
+                exportText += `Consultation ${index + 1} - ${new Date(consultation.timestamp).toLocaleString()}:\n`;
+                consultation.messages.forEach(msg => {
+                    exportText += `${msg.sender}: ${msg.text}\n`;
+                });
+                exportText += `\n`;
+            });
+            
+            // Create a blob and download it
+            const blob = new Blob([exportText], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `MediBot_Consultation_${new Date().toISOString().split('T')[0]}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            addMessage('MediBot', 'Consultation exported successfully.', 'bot');
+        }
+        
+        // Add message to chat
+        function addMessage(sender, text, type) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `flex ${type === 'user' ? 'justify-end' : 'justify-start'}`;
+            
+            const messageContent = document.createElement('div');
+            messageContent.className = `max-w-xs md:max-w-md rounded-lg px-4 py-2 ${type === 'user' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-800'}`;
+            
+            // If it's a prescription, format it differently
+            if (text.includes('PRESCRIPTION:')) {
+                messageContent.className = 'prescription-card max-w-xs md:max-w-md rounded-lg p-4 text-gray-800';
+                const prescriptionText = text.replace('PRESCRIPTION:', '').trim();
+                messageContent.innerHTML = `
+                    <div class="flex items-center mb-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <h4 class="font-semibold">Prescription</h4>
+                    </div>
+                    <div class="text-sm whitespace-pre-line">${prescriptionText}</div>
+                `;
+            } else {
+                messageContent.textContent = text;
+            }
+            
+            messageDiv.appendChild(messageContent);
+            chatContainer.appendChild(messageDiv);
+            
+            // Scroll to bottom
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            
+            // Add to consultation history
+            consultationHistory.push({
+                timestamp: new Date().toISOString(),
+                messages: [{
+                    sender: sender,
+                    text: text,
+                    type: type
+                }]
+            });
+            
+            localStorage.setItem('consultationHistory', JSON.stringify(consultationHistory));
+        }
+        
+        // Show typing indicator
+        function showTypingIndicator() {
+            const typingDiv = document.createElement('div');
+            typingDiv.className = 'flex justify-start';
+            
+            const typingContent = document.createElement('div');
+            typingContent.className = 'typing-indicator bg-gray-100 text-gray-800 rounded-lg px-4 py-2';
+            
+            const dot1 = document.createElement('div');
+            dot1.className = 'typing-dot';
+            
+            const dot2 = document.createElement('div');
+            dot2.className = 'typing-dot';
+            
+            const dot3 = document.createElement('div');
+            dot3.className = 'typing-dot';
+            
+            typingContent.appendChild(dot1);
+            typingContent.appendChild(dot2);
+            typingContent.appendChild(dot3);
+            
+            typingDiv.appendChild(typingContent);
+            chatContainer.appendChild(typingDiv);
+            
+            // Scroll to bottom
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            
+            return typingDiv;
+        }
+        
+        // Hide typing indicator
+        function hideTypingIndicator(indicator) {
+            if (indicator && indicator.parentNode) {
+                indicator.parentNode.removeChild(indicator);
+            }
+        }
+        
+        // Process user input
+        async function processUserInput(inputText) {
+            if (!inputText.trim()) return;
+            
+            // Add user message to chat
+            addMessage('You', inputText, 'user');
+            
+            // Show typing indicator
+            const typingIndicator = showTypingIndicator();
+            
+            try {
+                // Simulate API call delay
+                await new Promise(resolve => setTimeout(resolve, 1500));
+                
+                // Process the input with Gemini API (simulated in this example)
+                let responseText = await getGeminiResponse(inputText);
+                
+                // Hide typing indicator
+                hideTypingIndicator(typingIndicator);
+                
+                // Add bot response to chat
+                addMessage('MediBot', responseText, 'bot');
+                
+                // If the response includes a prescription, also generate TTS
+                if (responseText.includes('PRESCRIPTION:')) {
+                    // Simulate TTS generation with Kokoro TTS
+                    await generateTTS(responseText.replace('PRESCRIPTION:', '').trim());
+                }
+            } catch (error) {
+                console.error('Error processing input:', error);
+                hideTypingIndicator(typingIndicator);
+                addMessage('MediBot', 'Sorry, I encountered an error processing your request. Please try again.', 'bot');
+            }
+        }
+        
+        // Simulated Gemini API response
+        async function getGeminiResponse(inputText) {
+            // In a real implementation, this would call the Gemini API
+            // For this example, we'll simulate responses based on keywords
+            
+            const lowerInput = inputText.toLowerCase();
+            
+            // Check for emergency keywords
+            const emergencyKeywords = ['chest pain', 'difficulty breathing', 'severe pain', 'unconscious', 'bleeding', 'stroke', 'heart attack'];
+            if (emergencyKeywords.some(keyword => lowerInput.includes(keyword))) {
+                return 'EMERGENCY: Based on your symptoms, this may be a medical emergency. Please seek immediate medical attention or call emergency services.';
+            }
+            
+            // Check for common conditions
+            if (lowerInput.includes('fever') && lowerInput.includes('cough')) {
+                return `Based on your symptoms (fever and cough), you may have a respiratory infection like the flu or COVID-19. 
+                
+                RECOMMENDATIONS:
+                - Get plenty of rest
+                - Stay hydrated
+                - Take acetaminophen or ibuprofen for fever
+                - Monitor your temperature
+                - Consider COVID-19 testing if you've been exposed
+                
+                PRESCRIPTION:
+                Medication: Acetaminophen 500mg
+                Dosage: 1-2 tablets every 4-6 hours as needed for fever
+                Duration: Until symptoms resolve
+                Max: 8 tablets per day
+                
+                If symptoms worsen or persist beyond 3 days, please consult a healthcare provider.`;
+            } else if (lowerInput.includes('headache')) {
+                return `Based on your headache symptoms:
+                
+                RECOMMENDATIONS:
+                - Rest in a quiet, dark room
+                - Apply a cold compress to your forehead
+                - Stay hydrated
+                - Avoid screen time if possible
+                
+                PRESCRIPTION:
+                Medication: Ibuprofen 200mg
+                Dosage: 1-2 tablets every 6-8 hours as needed
+                Duration: Until pain subsides
+                Max: 6 tablets per day
+                
+                If headache is severe, persistent, or accompanied by vision changes, nausea/vomiting, or confusion, seek medical attention immediately.`;
+            } else if (lowerInput.includes('sore throat')) {
+                return `For your sore throat:
+                
+                RECOMMENDATIONS:
+                - Gargle with warm salt water
+                - Stay hydrated with warm liquids
+                - Avoid irritants like smoke
+                - Use a humidifier if air is dry
+                
+                PRESCRIPTION:
+                Medication: Acetaminophen or throat lozenges
+                Dosage: As directed on package
+                
+                If sore throat persists beyond 3 days or is accompanied by fever or difficulty swallowing, please see a doctor.`;
+            } else {
+                // Generic response for unrecognized symptoms
+                return `Thank you for describing your symptoms. Based on the information provided:
+                
+                - It's important to monitor your symptoms closely
+                - Stay hydrated and get plenty of rest
+                - Over-the-counter pain relievers may help with discomfort
+                
+                For more specific advice, please provide additional details about:
+                - Duration of symptoms
+                - Severity (mild, moderate, severe)
+                - Any other associated symptoms
+                - Any medications you're currently taking
+                
+                Remember, I'm an AI assistant and cannot replace professional medical advice. If symptoms worsen or concern you, please consult a healthcare provider.`;
+            }
+        }
+        
+        // Simulated TTS generation with Kokoro TTS
+        async function generateTTS(text) {
+            // In a real implementation, this would call the Kokoro TTS API
+            console.log('Generating TTS for:', text);
+            
+            // Create an audio element and play it (simulated)
+            const audio = new Audio();
+            audio.src = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3'; // Placeholder audio
+            audio.play().catch(e => console.log('Audio playback error:', e));
+        }
+        
+        // Start/stop voice recording
+        async function toggleVoiceRecording() {
+            if (isRecording) {
+                // Stop recording
+                mediaRecorder.stop();
+                isRecording = false;
+                voiceBtn.classList.remove('pulse-animation', 'bg-red-500', 'text-white');
+                voiceBtn.classList.add('bg-blue-100', 'text-blue-600');
+                
+                // Process the recorded audio with Whisper STT
+                await processRecordedAudio();
+            } else {
+                // Start recording
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
+                    
+                    mediaRecorder.ondataavailable = (e) => {
+                        audioChunks.push(e.data);
+                    };
+                    
+                    mediaRecorder.onstop = () => {
+                        stream.getTracks().forEach(track => track.stop());
+                    };
+                    
+                    mediaRecorder.start();
+                    isRecording = true;
+                    voiceBtn.classList.add('pulse-animation', 'bg-red-500', 'text-white');
+                    voiceBtn.classList.remove('bg-blue-100', 'text-blue-600');
+                    
+                    // Add visual feedback
+                    addMessage('System', 'Listening... Speak clearly about your symptoms.', 'bot');
+                } catch (error) {
+                    console.error('Error accessing microphone:', error);
+                    addMessage('MediBot', 'Could not access microphone. Please ensure you have granted microphone permissions.', 'bot');
+                }
+            }
+        }
+        
+        // Process recorded audio with Whisper STT
+        async function processRecordedAudio() {
+            if (audioChunks.length === 0) return;
+            
+            const typingIndicator = showTypingIndicator();
+            
+            try {
+                // Simulate processing delay
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                
+                // In a real implementation, this would send the audio to Whisper STT API
+                // For this example, we'll simulate transcription
+                const simulatedTranscription = "I've been having a headache and fever since yesterday. My temperature is 101°F.";
+                
+                hideTypingIndicator(typingIndicator);
+                
+                // Add the transcribed text to chat
+                addMessage('You', simulatedTranscription, 'user');
+                
+                // Process the transcribed text
+                await processUserInput(simulatedTranscription);
+            } catch (error) {
+                console.error('Error processing audio:', error);
+                hideTypingIndicator(typingIndicator);
+                addMessage('MediBot', 'Sorry, I had trouble understanding your voice. Please try again or type your symptoms.', 'bot');
+            }
+        }
+        
+        // Event Listeners
+        sendBtn.addEventListener('click', () => {
+            const inputText = userInput.value.trim();
+            if (inputText) {
+                processUserInput(inputText);
+                userInput.value = '';
+            }
+        });
+        
+        userInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                const inputText = userInput.value.trim();
+                if (inputText) {
+                    processUserInput(inputText);
+                    userInput.value = '';
+                }
+            }
+        });
+        
+        voiceBtn.addEventListener('click', toggleVoiceRecording);
+        startVoiceBtn.addEventListener('click', toggleVoiceRecording);
+        
+        helpBtn.addEventListener('click', () => {
+            helpModal.classList.remove('hidden');
+        });
+        
+        closeHelpModal.addEventListener('click', () => {
+            helpModal.classList.add('hidden');
+        });
+        
+        gotItBtn.addEventListener('click', () => {
+            helpModal.classList.add('hidden');
+        });
+        
+        emergencyBtn.addEventListener('click', () => {
+            emergencyModal.classList.remove('hidden');
+        });
+        
+        closeEmergencyModal.addEventListener('click', () => {
+            emergencyModal.classList.add('hidden');
+        });
+        
+        cancelEmergencyBtn.addEventListener('click', () => {
+            emergencyModal.classList.add('hidden');
+        });
+        
+        callEmergencyBtn.addEventListener('click', () => {
+            alert('In a real implementation, this would call emergency services or show local emergency numbers.');
+            emergencyModal.classList.add('hidden');
+        });
+        
+        darkModeToggle.addEventListener('click', toggleDarkMode);
+        
+        savePatientBtn.addEventListener('click', savePatientData);
+        
+        newConsultationBtn.addEventListener('click', newConsultation);
+        
+        exportBtn.addEventListener('click', exportConsultation);
+        
+        // Initialize the app
+        init();
+    </script>
+</body>
+</html>
