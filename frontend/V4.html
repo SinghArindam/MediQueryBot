@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MediChat Pro | Premium Medical Assistant</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+        
+        :root {
+            --gold: #D4AF37;
+            --blue: #0A84FF;
+            --green: #00C853;
+            --red: #FF3B30;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #000;
+            color: #fff;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+        }
+        
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        
+        .glass-card {
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(212, 175, 55, 0.2);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+        }
+        
+        .gold-border {
+            border: 1px solid var(--gold);
+        }
+        
+        .inner-gold-border {
+            box-shadow: inset 0 0 0 1px var(--gold);
+        }
+        
+        .gradient-bg {
+            background: radial-gradient(circle at 50% 50%, rgba(10, 132, 255, 0.1) 0%, rgba(0, 200, 83, 0.1) 50%, rgba(212, 175, 55, 0.1) 100%);
+        }
+        
+        .fab-ripple {
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .fab-ripple:after {
+            content: "";
+            display: block;
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+            background-image: radial-gradient(circle, var(--blue) 10%, transparent 10.01%);
+            background-repeat: no-repeat;
+            background-position: 50%;
+            transform: scale(10,10);
+            opacity: 0;
+            transition: transform .5s, opacity 1s;
+        }
+        
+        .fab-ripple:active:after {
+            transform: scale(0,0);
+            opacity: 0.3;
+            transition: 0s;
+        }
+        
+        .chat-bubble {
+            opacity: 0;
+            transform: translateY(10px);
+            transition: opacity 0.3s ease-out, transform 0.3s ease-out;
+        }
+        
+        .chat-bubble.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        .typewriter {
+            overflow: hidden;
+            border-right: 2px solid var(--gold);
+            white-space: nowrap;
+            margin: 0 auto;
+            letter-spacing: 0.15em;
+            animation: typing 3.5s steps(40, end), blink-caret 0.75s step-end infinite;
+        }
+        
+        @keyframes typing {
+            from { width: 0 }
+            to { width: 100% }
+        }
+        
+        @keyframes blink-caret {
+            from, to { border-color: transparent }
+            50% { border-color: var(--gold) }
+        }
+        
+        .medical-card {
+            transform-style: preserve-3d;
+            transition: transform 0.5s;
+            transform: perspective(1000px) rotateX(0deg) rotateY(0deg);
+        }
+        
+        .medical-card:hover {
+            transform: perspective(1000px) rotateX(5deg) rotateY(5deg);
+        }
+        
+        @media (max-width: 768px) {
+            .split-layout {
+                flex-direction: column;
+            }
+            
+            .conversation-pane, .context-pane {
+                width: 100% !important;
+            }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+    <!-- Top App Bar -->
+    <header class="bg-black py-4 px-6 flex justify-between items-center border-b border-gray-800">
+        <div class="flex items-center space-x-4">
+            <div class="relative">
+                <div class="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center cursor-pointer medical-card" id="profileThumbnail">
+                    <div class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-green-500 flex items-center justify-center text-white font-bold">JP</div>
+                    <div class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-green-500 border-2 border-black"></div>
+                </div>
+            </div>
+            <div>
+                <h1 class="text-white font-bold">John Peterson</h1>
+                <p class="text-gray-400 text-xs">42 years • Blood Type: A+</p>
+            </div>
+        </div>
+        <div class="flex items-center space-x-4">
+            <button class="text-gray-400 hover:text-white transition-colors">
+                <i class="fas fa-cog text-lg"></i>
+            </button>
+            <button class="text-gray-400 hover:text-white transition-colors">
+                <i class="fas fa-question-circle text-lg"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex split-layout">
+        <!-- Conversation Pane -->
+        <section class="w-2/3 p-6 flex flex-col" style="height: calc(100vh - 72px);">
+            <div class="flex-1 overflow-y-auto mb-4 space-y-4" id="chatContainer">
+                <!-- Chat bubbles will be added here by JavaScript -->
+            </div>
+            
+            <div class="glass-card rounded-lg p-4 gradient-bg">
+                <div class="flex items-center space-x-2">
+                    <div class="flex-1 relative">
+                        <input type="text" placeholder="Type your health concern..." 
+                               class="w-full bg-gray-900 text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        <div class="absolute right-3 top-3 flex space-x-2">
+                            <button class="text-gray-400 hover:text-blue-500 transition-colors">
+                                <i class="fas fa-microphone"></i>
+                            </button>
+                            <button class="text-gray-400 hover:text-blue-500 transition-colors">
+                                <i class="fas fa-paperclip"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <button class="fab-ripple bg-gradient-to-br from-blue-500 to-green-500 text-white w-12 h-12 rounded-full flex items-center justify-center shadow-lg hover:shadow-xl transition-shadow">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+                <div class="mt-2 text-xs text-gray-500 flex justify-between">
+                    <span>MediChat Pro v2.4.1</span>
+                    <span>End-to-end encrypted</span>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Context Pane -->
+        <section class="w-1/3 border-l border-gray-800 p-6 flex flex-col" style="height: calc(100vh - 72px);">
+            <div class="glass-card rounded-lg p-6 mb-6 gradient-bg inner-gold-border">
+                <h2 class="text-xl font-bold text-white mb-4 flex items-center">
+                    <i class="fas fa-id-card mr-2 text-gold-500" style="color: var(--gold);"></i>
+                    Medical Card
+                </h2>
+                <div class="medical-card bg-gradient-to-br from-gray-900 to-gray-800 rounded-xl p-6 gold-border shadow-xl cursor-pointer transform transition-transform">
+                    <div class="flex justify-between items-start mb-6">
+                        <div>
+                            <h3 class="text-2xl font-bold">John Peterson</h3>
+                            <p class="text-gray-400">42 years • Male</p>
+                        </div>
+                        <div class="bg-black p-2 rounded">
+                            <div class="w-16 h-16 bg-white flex items-center justify-center">
+                                <!-- QR Code Placeholder -->
+                                <div class="grid grid-cols-4 gap-1 w-12 h-12">
+                                    <div class="bg-black"></div><div class="bg-black"></div><div class="bg-black"></div><div class="bg-black"></div>
+                                    <div class="bg-black"></div><div class="bg-white"></div><div class="bg-white"></div><div class="bg-black"></div>
+                                    <div class="bg-black"></div><div class="bg-white"></div><div class="bg-black"></div><div class="bg-black"></div>
+                                    <div class="bg-black"></div><div class="bg-black"></div><div class="bg-white"></div><div class="bg-black"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div>
+                            <p class="text-gray-400 text-xs">Blood Type</p>
+                            <p class="font-bold">A+</p>
+                        </div>
+                        <div>
+                            <p class="text-gray-400 text-xs">Allergies</p>
+                            <p class="font-bold">Penicillin</p>
+                        </div>
+                        <div>
+                            <p class="text-gray-400 text-xs">Conditions</p>
+                            <p class="font-bold">Hypertension</p>
+                        </div>
+                        <div>
+                            <p class="text-gray-400 text-xs">Last Updated</p>
+                            <p class="font-bold">Jun 15, 2023</p>
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-between items-center">
+                        <button class="text-xs bg-black text-white px-3 py-1 rounded flex items-center">
+                            <i class="fas fa-download mr-1"></i> Save
+                        </button>
+                        <div class="text-xs text-gray-400">
+                            ID: 7X9P-2K4M-6R8Q
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="glass-card rounded-lg p-6 mb-6 gradient-bg inner-gold-border">
+                <h2 class="text-xl font-bold text-white mb-4 flex items-center">
+                    <i class="fas fa-heartbeat mr-2" style="color: var(--red);"></i>
+                    Quick Vitals
+                </h2>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-gray-900 rounded-lg p-3">
+                        <p class="text-gray-400 text-xs">Blood Pressure</p>
+                        <div class="flex items-end">
+                            <input type="text" value="120" class="bg-transparent border-b border-gray-700 w-8 text-right mono focus:outline-none">
+                            <span class="mx-1">/</span>
+                            <input type="text" value="80" class="bg-transparent border-b border-gray-700 w-8 text-right mono focus:outline-none">
+                            <span class="ml-1 text-xs">mmHg</span>
+                        </div>
+                    </div>
+                    <div class="bg-gray-900 rounded-lg p-3">
+                        <p class="text-gray-400 text-xs">Heart Rate</p>
+                        <div class="flex items-end">
+                            <input type="text" value="72" class="bg-transparent border-b border-gray-700 w-8 text-right mono focus:outline-none">
+                            <span class="ml-1 text-xs">bpm</span>
+                        </div>
+                    </div>
+                    <div class="bg-gray-900 rounded-lg p-3">
+                        <p class="text-gray-400 text-xs">Temperature</p>
+                        <div class="flex items-end">
+                            <input type="text" value="36.6" class="bg-transparent border-b border-gray-700 w-12 text-right mono focus:outline-none">
+                            <span class="ml-1 text-xs">°C</span>
+                        </div>
+                    </div>
+                    <div class="bg-gray-900 rounded-lg p-3">
+                        <p class="text-gray-400 text-xs">Oxygen</p>
+                        <div class="flex items-end">
+                            <input type="text" value="98" class="bg-transparent border-b border-gray-700 w-8 text-right mono focus:outline-none">
+                            <span class="ml-1 text-xs">%</span>
+                        </div>
+                    </div>
+                </div>
+                <button class="w-full mt-4 bg-gradient-to-r from-blue-500 to-green-500 text-white py-2 rounded-lg font-bold hover:opacity-90 transition-opacity">
+                    Update Vitals
+                </button>
+            </div>
+            
+            <div class="glass-card rounded-lg p-6 gradient-bg inner-gold-border flex-1 flex flex-col">
+                <h2 class="text-xl font-bold text-white mb-4 flex items-center">
+                    <i class="fas fa-history mr-2" style="color: var(--blue);"></i>
+                    Recent Consultations
+                </h2>
+                <div class="flex-1 overflow-y-auto">
+                    <div class="space-y-3">
+                        <div class="bg-gray-900 rounded-lg p-4 cursor-pointer hover:bg-gray-800 transition-colors">
+                            <div class="flex justify-between items-center mb-1">
+                                <h3 class="font-bold">Headache & Dizziness</h3>
+                                <span class="text-xs text-gray-400">Jun 12, 2023</span>
+                            </div>
+                            <p class="text-sm text-gray-400 truncate">Recommended: hydration, rest, follow up if symptoms persist...</p>
+                        </div>
+                        <div class="bg-gray-900 rounded-lg p-4 cursor-pointer hover:bg-gray-800 transition-colors">
+                            <div class="flex justify-between items-center mb-1">
+                                <h3 class="font-bold">Blood Pressure Review</h3>
+                                <span class="text-xs text-gray-400">May 28, 2023</span>
+                            </div>
+                            <p class="text-sm text-gray-400 truncate">Current medication appears effective, continue dosage...</p>
+                        </div>
+                        <div class="bg-gray-900 rounded-lg p-4 cursor-pointer hover:bg-gray-800 transition-colors">
+                            <div class="flex justify-between items-center mb-1">
+                                <h3 class="font-bold">Allergy Symptoms</h3>
+                                <span class="text-xs text-gray-400">Apr 15, 2023</span>
+                            </div>
+                            <p class="text-sm text-gray-400 truncate">Identified potential new allergen, recommended allergy testing...</p>
+                        </div>
+                    </div>
+                </div>
+                <button class="w-full mt-4 bg-black text-white py-2 rounded-lg font-bold border border-gray-700 hover:bg-gray-800 transition-colors">
+                    View All Consultations
+                </button>
+            </div>
+        </section>
+    </main>
+    
+    <!-- Footer -->
+    <footer class="bg-black py-4 px-6 border-t border-gray-800 flex justify-between items-center">
+        <div class="text-gray-500 text-sm">
+            <span class="font-bold" style="color: var(--gold);">MediChat</span> Pro • HIPAA Compliant
+        </div>
+        <div class="flex items-center space-x-4">
+            <button class="text-gray-500 hover:text-white transition-colors">
+                <i class="fab fa-apple"></i>
+            </button>
+            <button class="text-gray-500 hover:text-white transition-colors">
+                <i class="fab fa-google-play"></i>
+            </button>
+            <button class="text-gray-500 hover:text-white transition-colors">
+                <i class="fas fa-share-alt"></i>
+            </button>
+        </div>
+    </footer>
+    
+    <!-- Signature Animation -->
+    <div class="fixed bottom-4 right-4 text-xs text-gray-500 flex items-center">
+        <span class="mr-2">Made by</span>
+        <svg width="80" height="20" viewBox="0 0 200 40" class="signature">
+            <path fill="none" stroke="var(--gold)" stroke-width="2" stroke-dasharray="300" stroke-dashoffset="300" 
+                  d="M10,30 Q30,10 50,30 T90,30" class="animate-draw" style="animation: draw 2s ease-in-out forwards;"></path>
+        </svg>
+    </div>
+    
+    <script>
+        // Sample chat messages
+        const chatMessages = [
+            {
+                sender: 'bot',
+                text: 'Hello John, I\'m your MediChat assistant. How can I help you today?',
+                timestamp: '2:45 PM'
+            },
+            {
+                sender: 'user',
+                text: 'I\'ve been having headaches for the past 3 days.',
+                timestamp: '2:46 PM'
+            },
+            {
+                sender: 'bot',
+                text: 'I\'m sorry to hear that. To better assist you, could you rate the pain on a scale from 1 to 10?',
+                timestamp: '2:46 PM'
+            },
+            {
+                sender: 'user',
+                text: 'About a 6. It\'s persistent but not unbearable.',
+                timestamp: '2:47 PM'
+            },
+            {
+                sender: 'bot',
+                text: 'Thank you. Based on your medical history, I recommend:\n\n1. Hydration - drink at least 8 glasses of water today\n2. Rest - try to reduce screen time\n3. Monitor - if pain persists beyond 48 hours, we should schedule a video consultation\n\nWould you like me to set a reminder to check in tomorrow?',
+                timestamp: '2:48 PM'
+            }
+        ];
+        
+        // Render chat messages with animation
+        function renderChatMessages() {
+            const chatContainer = document.getElementById('chatContainer');
+            chatContainer.innerHTML = '';
+            
+            chatMessages.forEach((message, index) => {
+                const messageElement = document.createElement('div');
+                messageElement.className = `chat-bubble flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`;
+                
+                messageElement.innerHTML = `
+                    <div class="max-w-xs md:max-w-md lg:max-w-lg ${message.sender === 'user' ? 'bg-gradient-to-br from-blue-500 to-green-500' : 'bg-gray-800'} rounded-2xl p-4 shadow-lg">
+                        <div class="text-white">${message.text}</div>
+                        <div class="text-xs mt-1 ${message.sender === 'user' ? 'text-blue-100' : 'text-gray-400'}">${message.timestamp}</div>
+                    </div>
+                `;
+                
+                chatContainer.appendChild(messageElement);
+                
+                // Animate in
+                setTimeout(() => {
+                    messageElement.classList.add('visible');
+                    
+                    // Add typewriter effect to bot messages
+                    if (message.sender === 'bot' && index === 0) {
+                        const textElement = messageElement.querySelector('div:first-child');
+                        textElement.classList.add('typewriter');
+                    }
+                }, index * 300);
+            });
+        }
+        
+        // Medical card hover effect
+        function setupMedicalCardHover() {
+            const card = document.querySelector('.medical-card');
+            
+            if (window.matchMedia("(min-width: 768px)").matches) {
+                card.addEventListener('mousemove', (e) => {
+                    const xAxis = (window.innerWidth / 2 - e.pageX) / 25;
+                    const yAxis = (window.innerHeight / 2 - e.pageY) / 25;
+                    card.style.transform = `perspective(1000px) rotateX(${yAxis}deg) rotateY(${xAxis}deg)`;
+                });
+                
+                card.addEventListener('mouseleave', () => {
+                    card.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg)';
+                });
+            }
+        }
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            renderChatMessages();
+            setupMedicalCardHover();
+            
+            // Add animation for signature
+            const signature = document.querySelector('.signature path');
+            signature.style.animation = 'draw 2s ease-in-out forwards';
+        });
+    </script>
+</body>
+</html>
