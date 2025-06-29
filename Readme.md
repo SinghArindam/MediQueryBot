@@ -5,6 +5,8 @@ Mobile-responsive, supports multiple simultaneous chats, Markdown answers, colla
 
 ---
 
+[Project-Plan](design/MediQueryBot/Project%20Plan.md)
+
 ## Journey \& version history
 
 | Version | Date (2025) | Highlights |
