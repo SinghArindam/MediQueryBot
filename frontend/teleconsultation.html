@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tele-Consultation Bot</title>
+
+  <!-- Tailwind CDN (utility CSS) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Lottie web-component -->
+  <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
+</head>
+<body class="bg-slate-100 flex flex-col h-screen">
+
+  <!-- Header ---------------------------------------------------------->
+  <header class="bg-emerald-600 text-white py-3 px-4 flex items-center gap-2">
+    <span class="text-2xl">🩺</span>
+    <h1 class="text-xl font-semibold">Tele-Consultation AI Doctor</h1>
+  </header>
+
+  <!-- Chat window ----------------------------------------------------->
+  <main id="chat" class="flex-1 overflow-y-auto px-4 py-6 space-y-4"></main>
+
+  <!-- Controls -------------------------------------------------------->
+  <footer class="bg-white shadow-inner p-4">
+    <div class="flex items-center gap-3">
+      <button id="micBtn"
+              class="w-14 h-14 rounded-full bg-red-500 text-white flex items-center justify-center text-2xl focus:outline-none">
+        🎙️
+      </button>
+
+      <label class="text-sm">Age:
+        <input id="ageInput" type="number" min="1" max="110" value="30"
+               class="border px-2 py-1 rounded w-20">
+      </label>
+
+      <label class="text-sm">Sex:
+        <select id="sexInput" class="border px-2 py-1 rounded">
+          <option value="male">Male</option>
+          <option value="female">Female</option>
+        </select>
+      </label>
+    </div>
+    <p class="text-xs text-gray-500 mt-2">
+      Press the red mic, speak your symptoms, then press again to stop.
+    </p>
+  </footer>
+
+  <!-- Hidden audio player -->
+  <audio id="audioPlayer"></audio>
+
+  <script>
+    //------------------------------------------------------------------
+    // Utility: append a chat bubble (left = user, right = bot)
+    //------------------------------------------------------------------
+    function addBubble(text, from = 'user', isPending = false) {
+      const chat = document.getElementById('chat');
+      const wrapper = document.createElement('div');
+      wrapper.className = `w-full flex ${from === 'user' ? 'justify-end' : 'justify-start'}`;
+
+      const bubble = document.createElement('div');
+      bubble.className =
+        `max-w-[75%] px-4 py-2 rounded-lg whitespace-pre-line leading-relaxed ` +
+        (from === 'user'
+          ? 'bg-blue-600 text-white self-end'
+          : 'bg-white text-gray-800 shadow');
+      bubble.textContent = text || (isPending ? '...' : '');
+      wrapper.appendChild(bubble);
+
+      // optional Lottie animation for bot
+      if (from === 'bot' && isPending) {
+        const lottie = document.createElement('lottie-player');
+        lottie.setAttribute('src',
+          'https://assets9.lottiefiles.com/packages/lf20_8wREpI.json'); // sample medical bot JSON
+        lottie.setAttribute('background', 'transparent');
+        lottie.setAttribute('speed', '1');
+        lottie.setAttribute('style', 'width:60px;height:60px;margin-left:6px');
+        lottie.setAttribute('loop', '');
+        lottie.setAttribute('autoplay', '');
+        wrapper.appendChild(lottie);
+        bubble.dataset.lottieId = Math.random().toString(36).slice(2);
+        lottie.dataset.id = bubble.dataset.lottieId;
+      }
+
+      chat.appendChild(wrapper);
+      chat.scrollTop = chat.scrollHeight;
+      return bubble;
+    }
+
+    //------------------------------------------------------------------
+    // Microphone recording handling
+    //------------------------------------------------------------------
+    let mediaRecorder, audioChunks = [], isRecording = false;
+
+    const micBtn   = document.getElementById('micBtn');
+    const ageInput = document.getElementById('ageInput');
+    const sexInput = document.getElementById('sexInput');
+    const player   = document.getElementById('audioPlayer');
+
+    micBtn.addEventListener('click', async () => {
+      if (!isRecording) {
+        // START recording
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
+
+        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+        mediaRecorder.start();
+        isRecording = true;
+        micBtn.classList.remove('bg-red-500');
+        micBtn.classList.add('bg-green-600');
+      } else {
+        // STOP recording
+        mediaRecorder.stop();
+        mediaRecorder.onstop = () => {
+          const blob = new Blob(audioChunks, { type: 'audio/webm' });
+          handleAudio(blob);
+        };
+        isRecording = false;
+        micBtn.classList.remove('bg-green-600');
+        micBtn.classList.add('bg-red-500');
+      }
+    });
+
+    //------------------------------------------------------------------
+    // Full pipeline: STT  →  Gemini  →  TTS
+    //------------------------------------------------------------------
+    async function handleAudio(blob) {
+      try {
+        //--------------------------------------------------------------
+        // 1) Send audio to Whisper STT
+        //--------------------------------------------------------------
+        const userBubble = addBubble('⏳ transcribing...', 'user', true);
+
+        const fd = new FormData();
+        fd.append('file', blob, 'speech.webm');
+
+        const sttResp = await fetch('/stt', { method: 'POST', body: fd });
+        const { text: transcript } = await sttResp.json();
+
+        userBubble.textContent = transcript;
+
+        //--------------------------------------------------------------
+        // 2) Send transcript + demographics to Gemini
+        //--------------------------------------------------------------
+        const botBubble = addBubble('', 'bot', true);
+
+        const chatResp = await fetch('/chat', {
+          method : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body   : JSON.stringify({
+            prompt: transcript,
+            age   : Number(ageInput.value || 30),
+            sex   : sexInput.value || 'male'
+          })
+        });
+
+        const { gemini } = await chatResp.json();
+        botBubble.textContent = gemini;
+
+        // remove the loading lottie if present
+        const lottieSibling = botBubble.parentElement.querySelector('lottie-player');
+        if (lottieSibling) lottieSibling.remove();
+
+        //--------------------------------------------------------------
+        // 3) Convert Gemini reply to speech with Kokoro TTS
+        //--------------------------------------------------------------
+        const ttsResp  = await fetch('/tts', {
+          method : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body   : JSON.stringify({ text: gemini, voice: 'bf_isabella' })
+        });
+        const ttsBlob  = await ttsResp.blob();
+        const url      = URL.createObjectURL(ttsBlob);
+
+        player.src = url;
+        player.play();
+      }
+      catch (err) {
+        console.error(err);
+        addBubble('⚠️  Error: ' + err.message, 'bot');
+      }
+    }
+  </script>
+</body>
+</html>
