@@ -132,10 +132,10 @@ POST /chats/{id}/ask          # {reply,latency,model_id}
 
 
 ### DeskTop
-![DeskTop](image.png)
+![DeskTop](assets/image.png)
 
 ### Mobile
-![Mobile](image2.jpg)
+![Mobile](assets/image2.jpg)
 
 ---
 
